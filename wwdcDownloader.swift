@@ -10,22 +10,27 @@
  of codes to get a Swift Script that bulk download all sessions.
  You may have understand my usual disclamer : "I'm a Marketing guy" so don't blame my messy (Swift beginer) code.
  Please feel free to make this script better if you feel like so. There is plenty to do.
-	
+
 	License: Do what you want with it. But notice that this script comes with no warranty and will not be maintained.
 	Usage: wwdcDownloader.swift
 	Default behavior: without any options the script will download all available hd1080 videos. And will re-take non fully downloaded ones.
 	Please use --help option to get currently available options
- 
+
 	TODO:
  - basically all previous script option (previuous years, checks, cleaner code, etc.)
- 
- 
+
+
  Note: SF Tested with Apple Swift version 4.2.1 (swiftlang-1000.11.42 clang-1000.11.45.1)
  */
 
+#if os(Linux)
+import Foundation
+import Glibc
+#else
 import Cocoa
 import Foundation
 import SystemConfiguration
+#endif
 
 enum VideoQuality: String {
     case HD1080 = "1080"
@@ -42,17 +47,21 @@ struct DownloadSlice {
     let source: URL
     let destination: URL
 }
-    
+
 //http://stackoverflow.com/a/30743763
 
 class Reachability {
     class func isConnectedToNetwork() -> Bool {
+        #if os(Linux)
+        return true
+        #else
         guard let flags = getFlags() else { return false }
         let isReachable = flags.contains(.reachable)
         let needsConnection = flags.contains(.connectionRequired)
         return (isReachable && !needsConnection)
+        #endif
     }
-
+    #if !os(Linux)
     class func getFlags() -> SCNetworkReachabilityFlags? {
         guard let reachability = ipv4Reachability() ?? ipv6Reachability() else {
             return nil
@@ -87,6 +96,7 @@ class Reachability {
             }
         })
     }
+    #endif
 }
 
 func show(progress: Double, barWidth: Int, speed: String, speedUnits: String) {
@@ -107,7 +117,11 @@ func show(progress: Double, barWidth: Int, speed: String, speedUnits: String) {
     }
 
     print("] \(String(format: "%.2f", progress))% \(speed)\(speedUnits)", terminator:"     \u{8}\u{8}\u{8}\u{8}\u{8}")
+    #if os(Linux)
+    fflush(stdout)
+    #else
     fflush(__stdoutp)
+    #endif
 }
 
 class DownloadSessionManager : NSObject, URLSessionDownloadDelegate {
@@ -255,7 +269,13 @@ class DownloadSessionManager : NSObject, URLSessionDownloadDelegate {
 
         print("\nOoops! Something went wrong: \(error.localizedDescription)")
 
-        guard let resumeData = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data else {
+        #if os(Linux)
+        let key = URLSessionDownloadTaskResumeData
+        #else
+        let key = NSURLSessionDownloadTaskResumeData
+        #endif
+
+        guard let resumeData = (error as NSError).userInfo[key] as? Data else {
             return
         }
 
@@ -522,7 +542,7 @@ class wwdcVideosController {
         } else if playlistPath.hasPrefix("http://") {
             slicesURL = URL(string: playlistPath)
             sliceRelativePath = String(playlistPath.dropFirst(7))
-        
+
         } else {
             slicesURL = playlistUrl.deletingLastPathComponent().appendingPathComponent(playlistPath)
             sliceRelativePath = playlistPath
@@ -616,7 +636,7 @@ class wwdcVideosController {
                                          playlist.index(playlist.startIndex, offsetBy: range.location+range.length)])
 
             let videoPath = dropProtocol(fromUrlString: path)
-            
+
             return baseUrl.appendingPathComponent(videoPath)
         }
 
@@ -637,7 +657,7 @@ class wwdcVideosController {
 
         return nil
     }
-    
+
     class func cleanupPlaylist(playlist: String, format: String) -> String? {
         let patterns = [
             "\n#EXT-X-STREAM-INF:.*RESOLUTION=\\d*x" + format + ",.*\n*.*\n#EXT-X-I-FRAME-STREAM-INF:[^\n]*",
@@ -762,8 +782,13 @@ func ffmpeg(command: String, filelist: [String], tsBaseUrl: URL, playlistFileUrl
 
 func commandPath(command: String) -> String? {
     let task = Process()
+    #if os(Linux)
+    task.launchPath = "/usr/bin/which"
+    task.arguments = [command]
+    #else
     task.launchPath = "/bin/bash"
     task.arguments = ["command", "-v", command]
+    #endif
     let standardOutput = Pipe()
     task.standardOutput = standardOutput
     task.launch()
@@ -883,7 +908,7 @@ while let argument = iterator.next() {
             print("Could not download WWDC and Tech Talks videos at the same time")
             showHelpAndExit()
         }
-        
+
         videoType = "tech-talks"
         shouldDownloadTechTalksVideoResource = true
         break
@@ -908,7 +933,7 @@ while let argument = iterator.next() {
                     print("WWDC videos earlier than 2012 were not made available for downloads")
                     showHelpAndExit()
 
-                    
+
                 } else {
                     videoType = "wwdc\(yearString)"
                     shouldDownloadWWDCVideoResource = true
