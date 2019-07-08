@@ -697,7 +697,16 @@ class wwdcVideosController {
         if let videoStreamLine = videoStreamLine {
             let pattern = "#EXT-X-STREAM-INF:.*[^\n]*"
             let regex = try! NSRegularExpression(pattern: pattern, options: .dotMatchesLineSeparators)
-            let newPlaylist = regex.stringByReplacingMatches(in: playlist, options: [], range: NSRange(location: 0, length: playlist.count), withTemplate: videoStreamLine)
+
+            var length = playlist.count
+            let audioPrefix = "#EXT-X-MEDIA:TYPE=AUDIO"
+            if playlist.contains(audioPrefix) {
+                let range = playlist.range(of: audioPrefix)!
+                let nsrange = NSRange(range, in: playlist)
+                length = nsrange.location - 1
+            }
+
+            let newPlaylist = regex.stringByReplacingMatches(in: playlist, options: [], range: NSRange(location: 0, length: length), withTemplate: videoStreamLine)
 
             return newPlaylist
         }
