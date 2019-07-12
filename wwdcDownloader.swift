@@ -677,7 +677,27 @@ class wwdcVideosController {
             }
         }
 
-        return newPlaylist
+        // Match first audio stream.
+        let regex = try! NSRegularExpression(pattern: "#EXT-X-MEDIA:TYPE=AUDIO[^\n]+\n", options: [])
+        let matches = regex.matches(in: playlist, options: [.withTransparentBounds], range: NSRange(location: 0, length: playlist.count))
+
+        var audioStreamLine: String?
+        if !matches.isEmpty {
+            let range = matches[0].range
+
+            let streamLine = String(playlist[playlist.index(playlist.startIndex, offsetBy: range.location) ..<
+                playlist.index(playlist.startIndex, offsetBy: range.location + range.length)])
+
+            audioStreamLine = dropProtocol(fromUrlString: streamLine)
+        }
+
+        if let newPlaylist = newPlaylist,
+           let audioStreamLine = audioStreamLine {
+            return "\(newPlaylist)\n\(audioStreamLine)"
+        }
+        else {
+            return newPlaylist
+        }
     }
 
     class func keepOnly(playlist: String, withPattern pattern: String) -> String? {
@@ -698,15 +718,7 @@ class wwdcVideosController {
             let pattern = "#EXT-X-STREAM-INF:.*[^\n]*"
             let regex = try! NSRegularExpression(pattern: pattern, options: .dotMatchesLineSeparators)
 
-            var length = playlist.count
-            let audioPrefix = "#EXT-X-MEDIA:TYPE=AUDIO"
-            if playlist.contains(audioPrefix) {
-                let range = playlist.range(of: audioPrefix)!
-                let nsrange = NSRange(range, in: playlist)
-                length = nsrange.location - 1
-            }
-
-            let newPlaylist = regex.stringByReplacingMatches(in: playlist, options: [], range: NSRange(location: 0, length: length), withTemplate: videoStreamLine)
+            let newPlaylist = regex.stringByReplacingMatches(in: playlist, options: [], range: NSRange(location: 0, length: playlist.count), withTemplate: videoStreamLine)
 
             return newPlaylist
         }
